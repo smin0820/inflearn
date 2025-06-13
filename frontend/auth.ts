@@ -1,11 +1,13 @@
-import NextAuth from "next-auth"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "@/prisma"
-import CredentialsProvider from "next-auth/providers/credentials"
-import { comparePasswords } from "./lib/password-utils"
- 
+import NextAuth from "next-auth";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import { prisma } from "@/prisma";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { comparePasswords } from "./lib/password-utils";
+import * as jwt from "jsonwebtoken";
+import { JWT } from "next-auth/jwt";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  useSecureCookies: process.env.NODE_ENV === 'production',
+  useSecureCookies: process.env.NODE_ENV === "production",
   trustHost: true,
   adapter: PrismaAdapter(prisma),
   secret: process.env.AUTH_SECRET,
@@ -16,7 +18,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: {
           label: "이메일",
           type: "email",
-          placeholder: "이메일을 입력해주세요.", 
+          placeholder: "이메일을 입력해주세요.",
         },
         password: {
           label: "비밀번호",
@@ -26,7 +28,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         // 1. 모든 값들이 정상적으로 들어왔는가?
-        if(!credentials || !credentials.email || !credentials.password) {
+        if (!credentials || !credentials.email || !credentials.password) {
           throw new Error("이메일과 비밀번호를 입력해주세요.");
         }
 
@@ -37,24 +39,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
 
-        if(!user) {
+        if (!user) {
           throw new Error("존재하지 않는 이메일입니다.");
         }
 
         // 3. 비밀번호 일치 여부 확인
-        const passwordsMatch = comparePasswords(credentials.password as string, user.hashedPassword as string);
-      
-        if(!passwordsMatch) {
+        const passwordsMatch = comparePasswords(
+          credentials.password as string,
+          user.hashedPassword as string
+        );
+
+        if (!passwordsMatch) {
           throw new Error("비밀번호가 일치하지 않습니다.");
         }
 
         return user;
       },
-    })
+    }),
   ],
   session: {
     strategy: "jwt",
   },
+  jwt: {
+    encode: async ({ token, secret }) => {
+      return jwt.sign(token as jwt.JwtPayload, secret as string);
+    },
+    decode: async ({ token, secret }) => {
+      return jwt.verify(token as string, secret as string) as JWT;
+    },
+  },
   pages: {},
-  callbacks: {}
-})
+  callbacks: {},
+});
